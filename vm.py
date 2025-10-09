@@ -249,6 +249,14 @@ class Interpreter():
             attach_to=iList
         )
 
+        register_dsl_method(
+            self,
+            src=iList_map_function(),
+            func_name="__list_map",
+            attach_as="map",
+            attach_to=range
+        )
+
         register_list_methods(self)
 
     def register_method(self, cls: type, name: str, fn: iObject) -> None:
