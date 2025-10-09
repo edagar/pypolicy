@@ -1,0 +1,131 @@
+// ================================
+// policy.lark (complete grammar)
+// ================================
+
+// ----- Imports & whitespace -----
+%import common.ESCAPED_STRING   -> STRING
+%import common.SIGNED_NUMBER    -> NUMBER
+%import common.WS
+%ignore WS
+%ignore /#[^\n]*/
+
+// (Optional) If you later want newline-sensitive statements,
+// stop ignoring NEWLINE and structure `start` with NEWLINEs.
+// %import common.NEWLINE
+
+// ----- Reserved words as tokens -----
+RETURN: "return"
+IF: "if"
+ELIF: "elif"
+ELSE: "else"
+END: "end"
+FOR: "for"
+IN: "in"
+PRINT: "print"
+TRUE: "true"
+FALSE: "false"
+AND: "and"
+OR: "or"
+NOT: "not"
+DEF: "def"
+
+// ----- Identifier (excludes keywords) -----
+NAME: /(?!return|if|elif|else|end|for|in|print|true|false|and|or|not|def)[a-zA-Z_][a-zA-Z0-9_]*/
+
+// ----- Program -----
+start: stmt+
+
+// ---------- Statements ----------
+?stmt: assign
+     | for_stmt
+     | func_def
+     | if_stmt
+     | return_stmt
+     | print_stmt
+     | expr_stmt
+     | lvalue_assign
+
+assign: NAME "=" expr                      -> assign
+
+lvalue_assign: NAME lvalue_chain ":=" expr        -> lvalue_assign
+
+
+lvalue_chain: lvalue_suffix+                      // at least one hop
+lvalue_suffix: "." NAME                           -> l_attr
+             | "[" expr "]"                       -> l_index
+
+print_stmt: PRINT "(" expr ")"               -> print_stmt
+
+for_stmt: FOR NAME IN expr [":"] block END -> for_stmt
+
+
+// if / elif / else — allow optional ":" after keywords for ergonomics
+if_stmt: IF expr [":"] block (ELIF expr [":"] block)* [ELSE [":"] block] END -> if_stmt
+
+return_stmt: RETURN expr                     -> return_stmt
+
+expr_stmt: expr                              -> expr_stmt
+
+block: stmt+                                 -> block
+
+// ---------- Expressions ----------
+?expr: or_expr
+
+?or_expr: and_expr
+        | or_expr OR and_expr               -> or_op
+
+?and_expr: not_expr
+         | and_expr AND not_expr            -> and_op
+
+?not_expr: comparison
+         | NOT not_expr                     -> not_op
+
+?comparison: arith
+           | comparison "==" arith          -> eq
+           | comparison "!=" arith          -> ne
+           | comparison ">"  arith          -> gt
+           | comparison "<"  arith          -> lt
+           | comparison ">=" arith          -> ge
+           | comparison "<=" arith          -> le
+           | comparison IN   arith          -> in_op
+
+?arith: term
+      | arith "+" term                      -> add
+      | arith "-" term                      -> sub
+
+?term: factor
+     | term "*" factor                      -> mul
+     | term "/" factor                      -> div
+
+?factor: postfix
+       | "-" factor                         -> neg
+
+// Postfix chain: calls, indexes, attributes
+?postfix: atom suffix*
+suffix: "(" [arg_list] ")"                  -> call
+      | "[" expr "]"                        -> index
+      | "." NAME                            -> attr
+
+?atom: NUMBER                               -> number
+     | STRING                               -> string
+     | TRUE                                 -> true
+     | FALSE                                -> false
+     | NAME                                 -> var
+     | list_literal
+     | dict_literal
+     | "(" expr ")"
+
+// ---------- Functions ----------
+func_def: DEF NAME "(" [param_list] ")" block END  -> func_def
+param_list: NAME ("," NAME)*
+
+// ---------- Collections ----------
+list_literal: "[" [arg_list] "]"            -> list
+arg_list: expr ("," expr)*
+
+dict_literal: "{" [dict_items] "}"          -> dict
+dict_items: dict_item ("," dict_item)*
+dict_item: dict_key ":" expr
+dict_key: NAME                               -> key_name
+        | STRING                             -> key_string
+
