@@ -14,6 +14,7 @@
 // %import common.NEWLINE
 
 // ----- Reserved words as tokens -----
+ARROW: "=>"
 RETURN: "return"
 IF: "if"
 ELIF: "elif"
@@ -97,7 +98,8 @@ block: stmt+                                 -> block
      | term "*" factor                      -> mul
      | term "/" factor                      -> div
 
-?factor: postfix
+?factor: lambda_expr
+       | postfix
        | "-" factor                         -> neg
 
 // Postfix chain: calls, indexes, attributes
@@ -106,7 +108,20 @@ suffix: "(" [arg_list] ")"                  -> call
       | "[" expr "]"                        -> index
       | "." NAME                            -> attr
 
-?atom: NUMBER                               -> number
+
+lambda_expr: lambda_params ARROW lambda_body  -> lambda
+lambda_params: NAME                           -> lambda_param_single
+         | "(" [name_list] ")"                -> lambda_param_list
+
+name_list: NAME ("," NAME)*                   -> name_list
+
+lambda_body: expr                              -> lambda_body_expr
+           | block END                         -> lambda_body_block
+
+
+
+?atom: lambda_expr
+     | NUMBER                               -> number
      | STRING                               -> string
      | TRUE                                 -> true
      | FALSE                                -> false

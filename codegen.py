@@ -176,6 +176,58 @@ class CodeGen:
     def gen_block(self, children):
         for c in children: self._gen(c)
 
+
+    def gen_lambda(self, children):
+        # children: [lambda_params, lambda_body] (plus tokens)
+        params_tree = None
+        body_tree = None
+        for ch in children:
+            if isinstance(ch, Tree):
+                if ch.data in ("lambda_param_single", "lambda_param_list"):
+                    params_tree = ch
+                elif ch.data.startswith("lambda_body_"):
+                    body_tree = ch
+
+        # Collect param names
+        params = []
+        if params_tree:
+            if params_tree.data == "lambda_param_single":
+                t = params_tree.children[0]
+                if isinstance(t, Token) and t.type == "NAME":
+                    params.append(str(t))
+            elif params_tree.data == "lambda_param_list":
+                # children may be NAME tokens or a name_list Tree
+                for t in params_tree.children:
+                    if isinstance(t, Token) and t.type == "NAME":
+                        params.append(str(t))
+                    elif isinstance(t, Tree) and t.data == "name_list":
+                        for c in t.children:
+                            if isinstance(c, Token) and c.type == "NAME":
+                                params.append(str(c))
+
+        # Compile body into a nested function
+        inner = CodeGen()
+        inner.local_scopes.append(set(params))
+
+        if body_tree and body_tree.data == "lambda_body_expr":
+            # single-expression body: value → RETURN
+            # find the expr Tree child
+            expr = next((c for c in body_tree.children if isinstance(c, Tree)), None)
+            inner._gen(expr)
+            inner.emit(Opcode.RETURN, iNil())
+        else:
+            # block body: compile block; allow explicit returns inside
+            # if it falls through, return nil implicitly
+            block = next((c for c in body_tree.children if isinstance(c, Tree) and c.data == "block"), None)
+            inner._gen(block)
+            inner.emit(Opcode.PUSH, iNil())
+            inner.emit(Opcode.RETURN, iNil())
+
+        fn_obj = iFunction(inner.code, iInteger(len(params)), params)
+        self.emit(Opcode.PUSH, fn_obj)
+
+
+
     # ------------- for-loops -------------
     def gen_for_stmt(self, children):
         # Grammar: FOR NAME IN expr block END
