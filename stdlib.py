@@ -1,9 +1,9 @@
 from vm import iPyObject, iPyfunction, iFunction, iObject, iInteger, iList
 from lark import Lark
 from codegen import CodeGen
+from dsl_method import register_dsl_method
 
 from typing import List, Tuple
-
 
 
 def iList_map_function():
@@ -18,6 +18,15 @@ def iList_map_function():
     end
     """
 
+def iList_each_function():
+    return """
+    def __list_each(l, f)
+        for x in l
+            f(x)
+        end
+    end
+    """
+
 def _list_append(self_obj: iObject, item: iObject) -> iObject:
     assert isinstance(self_obj, iList)
     self_obj.value().append(item)
@@ -26,6 +35,20 @@ def _list_append(self_obj: iObject, item: iObject) -> iObject:
 
 def register_list_methods(interp):
     interp.register_method(iList, "append", iPyfunction(_list_append, iInteger(2)))
+    register_dsl_method(
+        interp,
+        src=iList_each_function(),
+        func_name="__list_each",
+        attach_as="each",
+        attach_to=iList
+    )
+    register_dsl_method(
+        interp,
+        src=iList_map_function(),
+        func_name="__list_map",
+        attach_as="map",
+        attach_to=iList
+    )
 
 
 def range_fn(n):
