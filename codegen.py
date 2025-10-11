@@ -55,7 +55,11 @@ class CodeGen:
 
     # ------------- program / stmts -------------
     def gen_start(self, children): 
-        for c in children: self._gen(c)
+        for c in children:
+            self._gen(c)
+            if self.code and self.code[-1][0] == Opcode.RETURN:
+                break
+
 
     def gen_assign(self, children):
         name_tok, expr = children[0], children[1]
@@ -71,21 +75,15 @@ class CodeGen:
             self.emit(Opcode.STORE, iString(name))
 
     def gen_print_stmt(self, children):
-        # Children may include Token('PRINT') + the expr Tree
-        expr = None
-        for ch in children:
-            if isinstance(ch, Tree):
-                expr = ch
-                break
+        # Expect exactly one expression tree after the RETURN token.
+        expr = next((ch for ch in children if hasattr(ch, "data")), None)
 
         if expr is not None:
-            self._gen(expr)              # push value to print (x)
+            self._gen(expr)
         else:
-            # If somehow no expr, print nil instead (or raise)
             self.emit(Opcode.PUSH, iNil())
 
         self.emit(Opcode.PRINT, iNil())
-
 
     # ------------- functions -------------
     def gen_func_def(self, children):
@@ -158,23 +156,23 @@ class CodeGen:
 
 
     def gen_return_stmt(self, children):
-        # children may be [Token(RETURN), <expr Tree>] under Earley
-        expr = None
-        for ch in children:
-            if isinstance(ch, Tree):
-                expr = ch
-                break
+        # Expect exactly one expression tree after the RETURN token.
+        expr = next((ch for ch in children if hasattr(ch, "data")), None)
 
         if expr is not None:
-            self._gen(expr)                # push value
+            self._gen(expr)
         else:
-            self.emit(Opcode.PUSH, iNil()) # return nil if no expr
+            self.emit(Opcode.PUSH, iNil())
 
         self.emit(Opcode.RETURN, iNil())
 
 
     def gen_block(self, children):
-        for c in children: self._gen(c)
+        for c in children:
+            self._gen(c)
+            # If the last emitted instruction is RETURN, stop generating this block
+            if self.code and self.code[-1][0] == Opcode.RETURN:
+                break
 
 
     def gen_lambda(self, children):
@@ -383,26 +381,59 @@ class CodeGen:
     def gen_in_op(self, c): self._bin(c, Opcode.BIN_IN)
 
     # short-circuit logic uses your jump opcodes (from previous version)
-    def gen_not_op(self, c):
-        self._gen(c[0])
-        jt = self.emit_jump(Opcode.JUMP_IF_TRUE)
-        self.emit(Opcode.PUSH, iBool(True))
-        jend = self.emit_jump(Opcode.JUMP)
-        tpos = len(self.code); self.patch(jt, tpos)
+    def gen_not_op(self, children):
+        expr = next((ch for ch in children if hasattr(ch, "data")), None)
+        if expr is None:
+             # default to false -> not false => true (rare)
+            self.emit(Opcode.PUSH, iBool(False))
+        else:
+            self._gen(expr)
+        self.emit(Opcode.NOT, iNil())
+
+    def gen_and_op(self, children):
+        # a and b  -> if a is false, result False; else result b
+        left, right = self._pick_binary_exprs(children)
+
+        # eval left
+        self._gen(left)
+        # if left is false -> jump to push_false
+        j_false = self.emit_jump(Opcode.JUMP_IF_FALSE)
+
+        # left was true -> evaluate right; its value is the result
+        self._gen(right)
+        j_end = self.emit_jump(Opcode.JUMP)
+
+        # false path: push False as the result
+        false_pos = len(self.code)
+        self.patch(j_false, false_pos)
         self.emit(Opcode.PUSH, iBool(False))
-        end = len(self.code); self.patch(jend, end)
 
-    def gen_and_op(self, c):
-        self._gen(c[0]); jf = self.emit_jump(Opcode.JUMP_IF_FALSE)
-        self._gen(c[1]); jend = self.emit_jump(Opcode.JUMP)
-        fpos = len(self.code); self.patch(jf, fpos); self.emit(Opcode.PUSH, iBool(False))
-        end = len(self.code); self.patch(jend, end)
+        # end
+        end_pos = len(self.code)
+        self.patch(j_end, end_pos)
 
-    def gen_or_op(self, c):
-        self._gen(c[0]); jt = self.emit_jump(Opcode.JUMP_IF_TRUE)
-        self._gen(c[1]); jend = self.emit_jump(Opcode.JUMP)
-        tpos = len(self.code); self.patch(jt, tpos); self.emit(Opcode.PUSH, iBool(True))
-        end = len(self.code); self.patch(jend, end)
+    def gen_or_op(self, children):
+        # a or b  -> if a is true, result True; else result b
+        left, right = self._pick_binary_exprs(children)
+
+        # eval left
+        self._gen(left)
+        # if left is true -> jump to push_true
+        j_true = self.emit_jump(Opcode.JUMP_IF_TRUE)
+
+        # left was false -> evaluate right; its value is the result
+        self._gen(right)
+        j_end = self.emit_jump(Opcode.JUMP)
+
+        # true path: push True as the result
+        true_pos = len(self.code)
+        self.patch(j_true, true_pos)
+        self.emit(Opcode.PUSH, iBool(True))
+
+        # end
+        end_pos = len(self.code)
+        self.patch(j_end, end_pos)
+
 
     def gen_if_stmt(self, children):
         """
@@ -517,6 +548,9 @@ class CodeGen:
         # Optional cleanup if your stmt layer doesn't POP
         # self.emit(Opcode.POP, iNil())
 
+    def gen_postfix_call(self, children):
+        return self.gen_postfix(children)
+
 
     def gen_postfix(self, children):
         """
@@ -580,6 +614,3 @@ class CodeGen:
 
     # passthroughs
     def gen_arg_list(self, _): return
-    def gen_block(self, children): 
-        for c in children: self._gen(c)
-

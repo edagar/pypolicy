@@ -55,7 +55,6 @@ lvalue_chain: lvalue_suffix+                      // at least one hop
 lvalue_suffix: "." NAME                           -> l_attr
              | "[" expr "]"                       -> l_index
 
-print_stmt: PRINT "(" expr ")"               -> print_stmt
 
 for_stmt: FOR NAME IN expr [":"] block END -> for_stmt
 
@@ -63,9 +62,21 @@ for_stmt: FOR NAME IN expr [":"] block END -> for_stmt
 // if / elif / else — allow optional ":" after keywords for ergonomics
 if_stmt: IF expr [":"] block (ELIF expr [":"] block)* [ELSE [":"] block] END -> if_stmt
 
-return_stmt: RETURN expr                     -> return_stmt
+# Force return/print to grab the whole suffix chain
+# and allow "return (expr)" for arithmetic etc.
 
-expr_stmt: expr                              -> expr_stmt
+return_stmt: RETURN (postfix | bool_or_nolit | "(" expr ")") -> return_stmt
+
+
+
+print_stmt: PRINT "(" postfix ")"             -> print_stmt
+          |  PRINT "(" expr ")"               -> print_stmt
+
+
+expr_stmt: postfix_call                                     -> expr_stmt
+         | bool_or_nolit                                    -> expr_stmt
+         | "(" expr ")"                                     -> expr_stmt
+
 
 block: stmt+                                 -> block
 
@@ -90,6 +101,29 @@ block: stmt+                                 -> block
            | comparison "<=" arith          -> le
            | comparison IN   arith          -> in_op
 
+?comparison_nolit: arith_nolit
+                 | arith_nolit IN arith     -> in_op
+                 | arith_nolit "==" arith   -> eq
+                 | arith_nolit "!=" arith   -> ne
+                 | arith_nolit ">"  arith   -> gt
+                 | arith_nolit "<"  arith   -> lt
+                 | arith_nolit ">=" arith   -> ge
+                 | arith_nolit "<=" arith   -> le
+
+
+?bool_not_nolit: NOT bool_not_nolit              -> not_op
+               | comparison_nolit
+
+
+?bool_and_nolit: bool_not_nolit
+               | bool_and_nolit AND bool_not_nolit   -> and_op
+
+
+?bool_or_nolit: bool_and_nolit
+              | bool_or_nolit OR bool_and_nolit      -> or_op
+
+
+
 ?arith: term
       | arith "+" term                      -> add
       | arith "-" term                      -> sub
@@ -103,11 +137,40 @@ block: stmt+                                 -> block
        | "-" factor                         -> neg
 
 // Postfix chain: calls, indexes, attributes
-?postfix: atom suffix*
-suffix: "(" [arg_list] ")"                  -> call
-      | "[" expr "]"                        -> index
-      | "." NAME                            -> attr
+?postfix: atom (call_suffix | noncall_suffix)*
 
+
+// split suffix so we can require a call in expr_stmt
+call_suffix: "(" [arg_list] ")"              -> call
+noncall_suffix: "[" expr "]"                 -> index
+              | "." NAME                     -> attr
+
+// a postfix that contains at least one call somewhere in the chain
+postfix_call: atom noncall_suffix* call_suffix (call_suffix | noncall_suffix)* -> postfix
+
+
+?atom_nolit: NUMBER             -> number
+           | STRING             -> string
+           | TRUE               -> true
+           | FALSE              -> false
+           | "nil"              -> nil
+           | NAME               -> var
+           | "(" expr ")"
+           | lambda_expr
+
+?postfix_nolit: atom_nolit (call_suffix | noncall_suffix)* -> postfix
+
+// arithmetic for statements that won't begin with '[' or '{'
+?factor_nolit: postfix_nolit
+             | "-" factor_nolit              -> neg
+
+?term_nolit: factor_nolit
+           | term_nolit "*" factor_nolit     -> mul
+           | term_nolit "/" factor_nolit     -> div
+
+?arith_nolit: term_nolit
+            | arith_nolit "+" term_nolit     -> add
+            | arith_nolit "-" term_nolit     -> sub
 
 lambda_expr: lambda_params ARROW lambda_body  -> lambda
 lambda_params: NAME                           -> lambda_param_single
