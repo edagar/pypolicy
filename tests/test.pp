@@ -46,6 +46,7 @@ end
 
 print([1, 2, 3].map(i => i * i))
 
+
 # multi statement lambdas
 
 g = (a, b) =>
@@ -56,6 +57,32 @@ end
 
 print(g(10, 20))
 
+
+# and / or
+print("=========")
+print(true or false)
+print(true and true)
+print(true and false)
+print(true and false)
+print(true and false)
+
+
+if false or true
+    print("works!")
+end
+
+if true and true
+    print("also works!")
+end
+
+if true and false
+    print("never reached")
+elif false or true
+    print("reached")
+end
+
+print("=========")
+
 # policy return value
-return 1 in l
+return i in l
 
