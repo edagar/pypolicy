@@ -103,6 +103,7 @@ class Opcode(Enum):
     LT      = "lt"
     GTE     = "gte"
     LTE     = "lte"
+    NOT     = "not"
     GETATTR = "getattr"
     GETITEM = "getitem"
     PUSH_GLOBAL = "push_gbloal"
@@ -123,6 +124,7 @@ class Opcode(Enum):
     
     INDEX = "index"
     SET_INDEX = "set_index"
+    SET_ATTR = "set_attr"
 
 
 Instruction = Tuple[Opcode, iObject]
@@ -246,14 +248,6 @@ class Interpreter():
             src=iList_map_function(),
             func_name="__list_map",
             attach_as="map",
-            attach_to=iList
-        )
-
-        register_dsl_method(
-            self,
-            src=iList_map_function(),
-            func_name="__list_map",
-            attach_as="map",
             attach_to=range
         )
 
@@ -364,6 +358,10 @@ class Interpreter():
 
                 case Opcode.POP:
                     _ = self.pop()
+
+                case Opcode.NOT:
+                    val = self.pop()
+                    self.push(iBool(not bool(val.value())))
 
                 case Opcode.ITER_INIT:
                     iterable = self.pop()
@@ -573,9 +571,9 @@ class Interpreter():
                             i = key.value()
                             try:
                                 container.value()[i] = val
-                                self.push(val)
                             except Exception:
-                                self.push(iNil())
+                                # TODO: handle error
+                                pass
 
                         # iDict by string-like key
                         case (iDict(), iObject()):
@@ -583,7 +581,6 @@ class Interpreter():
                             if not isinstance(kval, str):
                                 kval = str(kval)
                             container.value()[kval] = val
-                            self.push(val)
 
                         case (_, _):
                             # Fallback to Python containers if you want to support iPyObject mappings/lists
@@ -591,9 +588,12 @@ class Interpreter():
                                 c = container.value()
                                 k = key.value()
                                 c[k] = val if isinstance(val, iObject) else val.value()
-                                self.push(val)
                             except Exception:
-                                self.push(iNil())
+                                # TODO: handle error
+                                pass
+
+                case Opcode.SET_ATTR:
+                    raise NotImplementedError()
 
                 case Opcode.RETURN:
                     return self.pop()
