@@ -257,6 +257,9 @@ class Interpreter():
         self.method_table.setdefault(cls, {})[name] = fn
 
     def resolve_method(self, obj: iObject, name: str) -> iObject | None:
+        if isinstance(obj, iPyObject):
+            obj = obj.value()
+
         for cls in type(obj).__mro__:     # walk MRO; first match wins
             table = self.method_table.get(cls)
             if table and name in table:
@@ -473,7 +476,6 @@ class Interpreter():
                                 case iPyObject():
                                     target = obj.value()
                                     val = getattr(target, attr_name)
-                                    print(f"==== pusing {val} after getattr on iPyObject {obj} ===")
                                 case iObject():
                                     val = getattr(obj, attr_name)
                                 case _:
