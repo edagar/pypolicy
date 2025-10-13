@@ -131,6 +131,7 @@ block: stmt+                                 -> block
 ?term: factor
      | term "*" factor                      -> mul
      | term "/" factor                      -> div
+     | term "%" factor                      -> mod
 
 ?factor: lambda_expr
        | postfix
@@ -167,6 +168,7 @@ postfix_call: atom noncall_suffix* call_suffix (call_suffix | noncall_suffix)* -
 ?term_nolit: factor_nolit
            | term_nolit "*" factor_nolit     -> mul
            | term_nolit "/" factor_nolit     -> div
+           | term_nolit "%" factor_nolit     -> mod
 
 ?arith_nolit: term_nolit
             | arith_nolit "+" term_nolit     -> add

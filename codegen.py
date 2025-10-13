@@ -369,6 +369,7 @@ class CodeGen:
     def gen_sub(self, c): self._bin(c, Opcode.BIN_SUB)
     def gen_mul(self, c): self._bin(c, Opcode.BIN_MUL)
     def gen_div(self, c): self._bin(c, Opcode.BIN_DIV)
+    def gen_mod(self, c): self._bin(c, Opcode.BIN_MOD)
     def gen_neg(self, c):
         self.emit(Opcode.PUSH, iInteger(0)); self._gen(c[0]); self.emit(Opcode.BIN_SUB, iNil())
 

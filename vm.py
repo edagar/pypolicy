@@ -91,6 +91,7 @@ class Opcode(Enum):
     BIN_MUL = "mul"
     BIN_DIV = "div"
     BIN_IN  = "in"
+    BIN_MOD = "mod"
     EQ      = "eq"
     NEQ     = "neq"
     PRINT   = "print"
@@ -402,7 +403,12 @@ class Interpreter():
                     rhs = self.pop()
                     lhs = self.pop()
                     self.push(iInteger(lhs.value() / rhs.value()))
-                    
+
+                case Opcode.BIN_MOD:
+                    rhs = self.pop()
+                    lhs = self.pop()
+                    self.push(iInteger(lhs.value() % rhs.value()))
+
                 case Opcode.EQ:
                     rhs = self.pop()
                     lhs = self.pop()
