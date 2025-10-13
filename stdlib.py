@@ -73,6 +73,20 @@ def register_list_methods(interp):
             attach_as="filter",
             attach_to=iList
     )
+    register_dsl_method(
+        interp,
+        src=iList_each_function(),
+        func_name="__list_each",
+        attach_as="each",
+        attach_to=range
+    )
+    register_dsl_method(
+            interp,
+            src=iList_filter_function(),
+            func_name="__list_filter",
+            attach_as="filter",
+            attach_to=range
+    )
 
 
 def range_fn(n):
