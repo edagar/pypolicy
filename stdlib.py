@@ -27,6 +27,22 @@ def iList_each_function():
     end
     """
 
+
+def iList_filter_function():
+    return """
+    def __list_filter(l, f)
+        ret = []
+        for x in l
+            cond = f(x)
+            if cond:
+                ret.append(x)
+            end
+        end
+        return ret
+    end
+    """
+
+
 def _list_append(self_obj: iObject, item: iObject) -> iObject:
     assert isinstance(self_obj, iList)
     self_obj.value().append(item)
@@ -35,6 +51,7 @@ def _list_append(self_obj: iObject, item: iObject) -> iObject:
 
 def register_list_methods(interp):
     interp.register_method(iList, "append", iPyfunction(_list_append, iInteger(2)))
+    interp.register_method(iList, "pop", iPyfunction(lambda l: l.value().pop(), iInteger(1)))
     register_dsl_method(
         interp,
         src=iList_each_function(),
@@ -48,6 +65,13 @@ def register_list_methods(interp):
         func_name="__list_map",
         attach_as="map",
         attach_to=iList
+    )
+    register_dsl_method(
+            interp,
+            src=iList_filter_function(),
+            func_name="__list_filter",
+            attach_as="filter",
+            attach_to=iList
     )
 
 
