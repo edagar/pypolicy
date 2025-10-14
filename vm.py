@@ -239,20 +239,12 @@ class Interpreter():
         self.trace_hook: Callable = None
         self.method_table: Dict[type, Dict[str, iObject]] = {}
 
-        from dsl_method import register_dsl_method
-        from stdlib import load_stdlib, iList_map_function, register_list_methods
+        from stdlib import load_stdlib, register_jwt_helpers,  register_list_methods
         for tup in load_stdlib():
             self.store_global(tup[0], tup[1])
 
-        register_dsl_method(
-            self,
-            src=iList_map_function(),
-            func_name="__list_map",
-            attach_as="map",
-            attach_to=range
-        )
-
         register_list_methods(self)
+        register_jwt_helpers(self)
 
     def register_method(self, cls: type, name: str, fn: iObject) -> None:
         self.method_table.setdefault(cls, {})[name] = fn

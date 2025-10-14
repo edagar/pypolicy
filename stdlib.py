@@ -3,7 +3,11 @@ from lark import Lark
 from codegen import CodeGen
 from dsl_method import register_dsl_method
 
-from typing import List, Tuple
+import jwt
+from jwt import PyJWKClient
+import requests
+
+from typing import List, Tuple, Any
 
 
 def iList_map_function():
@@ -41,6 +45,28 @@ def iList_filter_function():
         return ret
     end
     """
+
+def decode_and_validate_jwt(token: iObject, aud: iObject, well_known_uri: iObject) -> Any:
+    r = requests.get(well_known_uri.value())
+    config = r.json()
+    client = jwt.PyJWKClient(config['jwks_uri'])
+    signing_key = client.get_signing_key_from_jwt(token.value())
+    decoded_token = jwt.decode(
+            token.value().encode('utf-8'),
+            signing_key.key,
+            algorithms=['RS256'],
+            issuer=config['issuer'],
+            audience=aud.value(),
+            verify=True
+    )
+    return iPyObject(decoded_token)
+
+
+def register_jwt_helpers(interp):
+    interp.store_global(
+            "validate_jwt",
+            iPyfunction(decode_and_validate_jwt, iInteger(3))
+    )
 
 
 def _list_append(self_obj: iObject, item: iObject) -> iObject:
