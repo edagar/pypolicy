@@ -1,14 +1,9 @@
 #! /usr/bin/env python3
 
 
-from lark import Lark
-from codegen import CodeGen
 from vm import Interpreter, iPyObject, iPyfunction, iInteger, Opcode
 from readonly import freeze
-
-
-GRAMMAR = open("policy.lark", "r", encoding="utf-8").read()
-PARSER = Lark(GRAMMAR, parser="earley", lexer="dynamic", start="start")
+import parse
 
 
 def tracer(pc, op, arg, stack):
@@ -44,8 +39,7 @@ def main():
             print(interp.stack)
             continue
 
-        tree = PARSER.parse(src if src.endswith("\n") else src + "\n")
-        bc = CodeGen().compile(tree)
+        bc = parse.compile_source(src if src.endswith("\n") else src + "\n")
         # hack to make sure result is still on the stack so repl can display it
         if bc[-1][0] == Opcode.POP: bc.pop() 
         interp.exec(bc)
