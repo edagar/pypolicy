@@ -1,5 +1,5 @@
 from typing import Iterable, Tuple
-from vm import Opcode, iObject, iInteger, iString, iBool, iNil
+from .vm import Opcode, iObject, iInteger, iString, iBool, iNil
 
 
 def _arg_str(arg: iObject | None) -> str:

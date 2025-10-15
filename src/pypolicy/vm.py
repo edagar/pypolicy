@@ -239,7 +239,7 @@ class Interpreter():
         self.trace_hook: Callable = None
         self.method_table: Dict[type, Dict[str, iObject]] = {}
 
-        from stdlib import load_stdlib, register_jwt_helpers,  register_list_methods
+        from .stdlib import load_stdlib, register_jwt_helpers,  register_list_methods
         for tup in load_stdlib():
             self.store_global(tup[0], tup[1])
 

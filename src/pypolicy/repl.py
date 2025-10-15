@@ -1,9 +1,9 @@
 #! /usr/bin/env python3
 
 
-from vm import Interpreter, iPyObject, iPyfunction, iInteger, Opcode
-from readonly import freeze
-import parse
+from .vm import Interpreter, iPyObject, iPyfunction, iInteger, Opcode
+from .readonly import freeze
+from .parse import compile_source
 
 
 def tracer(pc, op, arg, stack):
@@ -39,7 +39,7 @@ def main():
             print(interp.stack)
             continue
 
-        bc = parse.compile_source(src if src.endswith("\n") else src + "\n")
+        bc = compile_source(src if src.endswith("\n") else src + "\n")
         # hack to make sure result is still on the stack so repl can display it
         if bc[-1][0] == Opcode.POP: bc.pop() 
         interp.exec(bc)

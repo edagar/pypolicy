@@ -1,8 +1,8 @@
 #! /usr/bin/env python3
 
 
-from vm import Interpreter, iPyObject, iPyfunction, iInteger, iString
-import parse
+from .vm import Interpreter, iPyObject, iPyfunction, iInteger, iString
+from .parse import parse_source, compile_ast
 
 import argparse
 import sys
@@ -48,13 +48,13 @@ if __name__ == "__main__":
         raise RuntimeError("input file cannot be omitted")
 
     with open(args.file_path, "r") as fd:
-        ast = parse.parse_source(fd.read())
+        ast = parse_source(fd.read())
 
     if args.ast_only:
         print(ast.pretty())
         sys.exit(1)
 
-    bytecode = parse.compile_ast(ast)
+    bytecode = compile_ast(ast)
 
     if args.bytecode_only:
         for opcode, arg in bytecode:

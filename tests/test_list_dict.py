@@ -1,5 +1,5 @@
 import pytest
-from vm import Opcode, iObject, iInteger, iString
+from pypolicy.vm import Opcode, iObject, iInteger, iString
 
 
 @pytest.mark.parametrize(

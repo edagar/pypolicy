@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Tuple, Optional, Union, Callable
 
 from lark import Tree, Token
-from vm import (
+from .vm import (
     Opcode, Instruction,
     iInteger, iString, iBool, iNil, iPyObject, iObject, iFunction
 )
@@ -344,7 +344,6 @@ class CodeGen:
 
 
     def gen_func_call(self, children):
-        breakpoint()
         name = str(children[0])
         if len(children) > 1 and isinstance(children[1], Tree) and children[1].data == "arg_list":
             for arg in children[1].children: self._gen(arg)

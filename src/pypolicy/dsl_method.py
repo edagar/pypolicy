@@ -1,15 +1,7 @@
 from lark import Lark
-from codegen import CodeGen
-from vm import Interpreter, iFunction, iString, iInteger, iNil, iList
-
-
-GRAMMAR = open("policy.lark", "r", encoding="utf-8").read()
-PARSER = Lark(GRAMMAR, parser="earley", lexer="dynamic", start="start")
-
-
-def compile_str(src: str):
-    tree = PARSER.parse(src if src.endswith("\n") else src + "\n")
-    return CodeGen().compile(tree)
+from .codegen import CodeGen
+from .vm import Interpreter, iFunction, iString, iInteger, iNil, iList
+from .parse import compile_source
 
 
 def register_dsl_method(
@@ -21,7 +13,7 @@ def register_dsl_method(
     attach_to: type,
 ) -> None:
     # Compile and execute the DSL function so it exists in globals
-    bc = compile_str(src)
+    bc = compile_source(src)
     interp.exec(bc)
 
     # Pull the compiled function object from globals

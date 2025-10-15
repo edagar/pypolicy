@@ -1,7 +1,7 @@
-from vm import iPyObject, iPyfunction, iFunction, iObject, iInteger, iList
 from lark import Lark
-from codegen import CodeGen
-from dsl_method import register_dsl_method
+from .vm import iPyObject, iPyfunction, iFunction, iObject, iInteger, iList
+from .codegen import CodeGen
+from .dsl_method import register_dsl_method
 
 import jwt
 from jwt import PyJWKClient

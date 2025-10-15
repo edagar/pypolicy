@@ -1,0 +1,22 @@
+[project]
+name = "pypolicy"
+version = "0.1.0"
+description = "A lightweight policy evaluation DSL and VM"
+authors = [{ name = "Tobias Rang" }]
+requires-python = ">=3.10"
+dependencies = ["lark", "requests", "pyjwt"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+server = ["Flask", "Flask-SQLAlchemy"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+pypolicy = ["*.lark"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

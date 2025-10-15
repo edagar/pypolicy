@@ -1,12 +1,17 @@
+from importlib.resources import files
+
 from lark import Lark
-from codegen import CodeGen
-from vm import Opcode, iObject, Instruction
+import pypolicy
+
+from .codegen import CodeGen
+from .vm import Opcode, iObject, Instruction
 
 from typing import List
 
 
-GRAMMAR = open("policy.lark", "r", encoding="utf-8").read()
+GRAMMAR = files(pypolicy).joinpath("policy.lark").read_text(encoding="utf-8")
 PARSER = Lark(GRAMMAR, parser="earley", lexer="dynamic", start="start")
+
 
 
 def compile_source(src: str) -> List[Instruction]:
