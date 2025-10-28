@@ -1,11 +1,7 @@
 from lark import Lark
-from .vm import iPyObject, iPyfunction, iFunction, iObject, iInteger, iList
+from .vm import iPyObject, iPyfunction, iFunction, iObject, iInteger, iList, iString, Interpreter, iDict
 from .codegen import CodeGen
 from .dsl_method import register_dsl_method
-
-import jwt
-from jwt import PyJWKClient
-import requests
 
 from typing import List, Tuple, Any
 
@@ -46,36 +42,13 @@ def iList_filter_function():
     end
     """
 
-def decode_and_validate_jwt(token: iObject, aud: iObject, well_known_uri: iObject) -> Any:
-    r = requests.get(well_known_uri.value())
-    config = r.json()
-    client = jwt.PyJWKClient(config['jwks_uri'])
-    signing_key = client.get_signing_key_from_jwt(token.value())
-    decoded_token = jwt.decode(
-            token.value().encode('utf-8'),
-            signing_key.key,
-            algorithms=['RS256'],
-            issuer=config['issuer'],
-            audience=aud.value(),
-            verify=True
-    )
-    return iPyObject(decoded_token)
-
-
-def register_jwt_helpers(interp):
-    interp.store_global(
-            "validate_jwt",
-            iPyfunction(decode_and_validate_jwt, iInteger(3))
-    )
-
-
 def _list_append(self_obj: iObject, item: iObject) -> iObject:
     assert isinstance(self_obj, iList)
     self_obj.value().append(item)
     return self_obj
 
 
-def register_list_methods(interp):
+def register_list_methods(interp: Interpreter):
     interp.register_method(iList, "append", iPyfunction(_list_append, iInteger(2)))
     interp.register_method(iList, "pop", iPyfunction(lambda l: l.value().pop(), iInteger(1)))
     register_dsl_method(
@@ -115,6 +88,23 @@ def register_list_methods(interp):
     )
 
 
+def __str_fmt(s, *args) -> iString:
+    return iString(s.value() % tuple([x.value() for x in args]))
+
+
+def __str_join(s: iString, l: iList) -> iString:
+    return iString(s.value().join([x.value() for x in l.value()]))
+
+
+def register_str_methods(interp: Interpreter):
+    interp.register_method(iString, "fmt", iPyfunction(__str_fmt , iInteger(0), varargs=True))
+    interp.register_method(iString, "join", iPyfunction(__str_join , iInteger(2)))
+
+
+def register_dict_methods(interp: Interpreter):
+    interp.register_method(iDict, "keys", iPyfunction(lambda d: iList([x for x in d.value().keys()]), iInteger(1)))
+
+
 def range_fn(n):
     return iPyObject(range(n.value()))
 
@@ -123,8 +113,14 @@ def len_fn(o):
     return iInteger(len(o.value()))
 
 
-def load_stdlib() -> List[Tuple[str, iPyfunction]]:
-    return [
+def load_stdlib(interp: Interpreter):
+    register_list_methods(interp)
+    register_str_methods(interp)
+    register_dict_methods(interp)
+
+    _globals = [
             ("range", iPyfunction(range_fn, iInteger(1))),
             ("len", iPyfunction(len_fn, iInteger(1)))
     ]
+    for t in _globals:
+        interp.store_global(t[0], t[1])
