@@ -321,7 +321,7 @@ class CodeGen:
         dict_key: NAME -> key_name | STRING -> key_string
         """
         n_pairs = 0
-        if children:
+        if children and children != [None]: # empty dict literal produces children -> [None]
             items = children[0]  # Tree('dict_items') or a single dict_item
             dict_elems = items.children if isinstance(items, Tree) and items.data == "dict_items" else [items]
             for it in dict_elems:
