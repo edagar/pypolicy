@@ -70,9 +70,6 @@ class iString(iObject):
     def value(self) -> Any:
         return self.val
 
-    def fmt(self, *specifier) -> str:
-        return self.val % (specifier)
-
 
 class iNil(iObject):
     def type(self) -> iType:
@@ -131,18 +128,34 @@ class Opcode(Enum):
 Instruction = Tuple[Opcode, iObject]
 
 
+class InterpreterError(RuntimeError):
+    def __init__(self, msg: str) -> None:
+        super().__init__(msg)
+
+
+class PPArityMismatchError(InterpreterError):
+    pass
+
+
+class PPTypeError(InterpreterError):
+    pass
+
+
 class iFunction(iObject):
-    def __init__(self, code: list[Instruction], n_params: iInteger, param_names: List[str]):
+    def __init__(self, code: List[Instruction], n_params: iInteger, param_names: List[str], varargs: bool = False):
         self.code = code
         self.n_params = n_params
         self.param_names = param_names
-
+        self.varargs = varargs
 
     def type(self) -> iType:
         return iType.FUNCTION
 
     def value(self) -> List[Instruction]:
         return self.code
+
+    def accepts(self, n: int) -> bool:
+        return n == self.n_params.value() or self.varargs
 
     def __repr__(self) -> str:
         return f"[{self.type()}]"
@@ -160,9 +173,10 @@ class iPyObject(iObject):
 
 
 class iPyfunction(iObject):
-    def __init__(self, func: Callable, n_params: iInteger) -> None:
+    def __init__(self, func: Callable, n_params: iInteger, varargs: bool = False) -> None:
         self.func = func
         self.n_params = n_params
+        self.varargs = varargs
 
     def type(self) -> iType:
         return iType.PYFUNCTION
@@ -173,9 +187,12 @@ class iPyfunction(iObject):
     def call(self, *args) -> iObject:
         return self.func(*args)
 
+    def accepts(self, n: int) -> bool:
+        return n == self.n_params.value() or self.varargs
+
 
 class iBoundMethod(iObject):
-    def __init__(self, func: iObject, self_obj: iObject):
+    def __init__(self, func: iFunction | iPyfunction, self_obj: iObject):
         self.func = func
         self.self_obj = self_obj
         self.n_params = self.func.n_params
@@ -183,7 +200,7 @@ class iBoundMethod(iObject):
     def type(self) -> iType:
         return iType.METHOD
 
-    def value(self) -> Callable:
+    def value(self) -> Tuple[iObject, iFunction | iPyfunction]:
         return (self.self_obj, self.func)
 
 
@@ -214,6 +231,9 @@ class iDict(iObject):
     def __repr__(self):
         return f"[dict] {self.items!r}"
 
+    def __getattr__(self, attr_name):
+        return to_iobj(self.items.get(attr_name))
+
 
 def to_iobj(x: Any) -> iObject:
     match x:
@@ -227,6 +247,10 @@ def to_iobj(x: Any) -> iObject:
             return iInteger(x)
         case str():
             return iString(x)
+        case list():
+            return iList(x)
+        case dict():
+            return iDict(x)
         case _: # Fallback: wrap arbitrary Python objects/collections
             return iPyObject(x)
 
@@ -236,20 +260,16 @@ class Interpreter():
         self.stack: List[iObject] = []
         self.globals: Dict[str, iObject] = {}
         self.local_frames: List[Dict[str, iObject]] = []
-        self.trace_hook: Callable = None
-        self.method_table: Dict[type, Dict[str, iObject]] = {}
+        self.trace_hook: Callable | None = None
+        self.method_table: Dict[type, Dict[str, iFunction | iPyfunction]] = {}
 
-        from .stdlib import load_stdlib, register_jwt_helpers,  register_list_methods
-        for tup in load_stdlib():
-            self.store_global(tup[0], tup[1])
+        from .stdlib import load_stdlib
+        load_stdlib(self)
 
-        register_list_methods(self)
-        register_jwt_helpers(self)
-
-    def register_method(self, cls: type, name: str, fn: iObject) -> None:
+    def register_method(self, cls: type, name: str, fn: iFunction | iPyfunction) -> None:
         self.method_table.setdefault(cls, {})[name] = fn
 
-    def resolve_method(self, obj: iObject, name: str) -> iObject | None:
+    def resolve_method(self, obj: iObject, name: str) -> iFunction | iPyfunction | None:
         if isinstance(obj, iPyObject):
             obj = obj.value()
 
@@ -333,14 +353,10 @@ class Interpreter():
 
                 case Opcode.MAKE_DICT:
                     n = arg.value()
-                    # expect keys then values to have been pushed in order:
-                    # push key1, push val1, key2, val2 ... then MAKE_DICT(n)
-                    # pop in reverse and reconstruct in original order.
                     pairs = []
                     for _ in range(n):
                         val = self.pop()
                         key = self.pop()
-                        # keys should be iString (from NAME/STRING); but allow others via .value() → str
                         k = key.value() if isinstance(key, iString) else str(key.value())
                         pairs.append((k, val))
                     pairs.reverse()
@@ -379,7 +395,7 @@ class Interpreter():
                 case Opcode.BIN_ADD:
                     rhs = self.pop()
                     lhs = self.pop()
-                    self.push(iInteger(rhs.value() + lhs.value()))
+                    self.push(iInteger(lhs.value() + rhs.value()))
 
                 case Opcode.BIN_SUB:
                     rhs = self.pop()
@@ -443,22 +459,26 @@ class Interpreter():
                         n += 1
                         callee = callee.func
 
+
+                    def _check_arity(callee, n):
+                        if not callee.accepts(n):
+                            raise RuntimeError(f"arity mismatch: expected {callee.n_params.value()}, got {n}")
+
                     match callee:
                         case iFunction():
-                            if callee.n_params.value() != n:
-                                raise RuntimeError(f"arity mismatch: expected {callee.n_params.value()}, got {n}")
+                            _check_arity(callee, n)
                             self.push_stack_frame(args, callee.param_names)
                             ret = self.exec(callee.value())
                             self.pop_stack_frame()
                             self.push(ret)
 
                         case iPyfunction():
-                            if callee.n_params.value() != n:
-                                raise RuntimeError(f"arity mismatch: expected {callee.n_params.value()}, got {n}")
+                            _check_arity(callee, n)
                             self.push(callee.call(*args))
 
                         case iPyObject():
-                            raise NotImplementedError()
+                            f = callee.value()
+                            self.push(to_iobj(f(*args)))
 
 
                 case Opcode.GETATTR:
@@ -549,11 +569,11 @@ class Interpreter():
                         case (iDict(), iObject()):
                             kval = key.value()
                             # allow other types as key, but stringify them
-                            self.push(container.value().get(str(kval, iNil())))
+                            self.push(container.value().get(str(kval), iNil()))
 
                         case _:
                             # fall back to Python indexing on wrapped objects/dicts/lists
-                            cval = container.value()
+                            cval = container.value() if isinstance(container, iObject) else container
                             kval = key.value()
                             try:
                                 res = cval[kval]
@@ -583,23 +603,39 @@ class Interpreter():
                             container.value()[kval] = val
 
                         case (_, _):
-                            # Fallback to Python containers if you want to support iPyObject mappings/lists
+                            # Fallback to Python containers
                             try:
                                 c = container.value()
                                 k = key.value()
                                 c[k] = val if isinstance(val, iObject) else val.value()
-                            except Exception:
-                                # TODO: handle error
-                                pass
+                            except Exception as e:
+                                raise PPTypeError(str(e))
 
                 case Opcode.SET_ATTR:
-                    raise NotImplementedError()
+                    attr_name = arg.value()
+                    val = self.pop()
+                    obj = self.pop()
+
+                    def __set_attribute(obj, attr_name, val):
+                            try:
+                                setattr(obj, attr_name, val)
+                            except Exception as e:
+                                raise PPTypeError(str(e))
+                    match obj:
+                        case iDict():
+                            obj.value()[attr_name] = val
+                        case iPyObject():
+                            __set_attribute(obj.value(), attr_name, val if isinstance(val, iFunction) else val)
+                        case iObject():
+                            __set_attribute(obj, attr_name, val)
+                        case _:
+                            raise PPTypeError("this should never happen")
 
                 case Opcode.RETURN:
                     return self.pop()
 
                 case _:
-                    raise RuntimeError(f"Unhandled opcode: {opcode}")
+                    raise InterpreterError(f"Unhandled opcode: {opcode}")
 
             pc = next_pc
 
